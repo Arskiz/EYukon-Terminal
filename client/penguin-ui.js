@@ -146,6 +146,10 @@ window.PenguinUI = (function () {
         const savedX = Config.get('menu_x', null); const savedY = Config.get('menu_y', '20px');
         box.style.cssText = `width: ${opts.width || '440px'}; top: ${savedY}; left: ${savedX ? savedX : (opts.x === 'right' ? 'auto' : (opts.x || '20px'))}; right: ${savedX ? 'auto' : (opts.x === 'right' ? '20px' : 'auto')};`;
 
+        ['mousedown', 'mouseup', 'click', 'pointerdown', 'pointerup', 'dblclick'].forEach(evt => {
+            box.addEventListener(evt, e => e.stopPropagation());
+        });
+
         const header = document.createElement('div'); header.className = 'mm-header'; header.innerHTML = `<span class="mm-title">${title}</span>`;
         
         let minimised = false, isRestoring = false, restoreX = 0, restoreY = 0;
@@ -211,7 +215,7 @@ window.PenguinUI = (function () {
             targetX = mouseX - ox; targetY = mouseY - oy; vx = 0; vy = 0; box.style.right = 'auto'; e.preventDefault();
         });
         document.addEventListener('mousemove', e => { if (!drag) return; mouseX = e.clientX; mouseY = e.clientY; targetX = mouseX - ox; targetY = mouseY - oy; });
-        document.addEventListener('mouseup', () => drag = false);
+        window.addEventListener('mouseup', () => drag = false, true);
 
         function updatePhysicsLoop() {
             let targetTilt = 0; const boxRect = box.getBoundingClientRect();
@@ -333,6 +337,9 @@ window.PenguinUI = (function () {
                 else inp.style.width = '120px';
                 inp.value = Config.get(configKey, defaultVal);
                 inp.oninput = () => { Config.set(configKey, inp.value); if (onChange) onChange(inp.value); };
+                inp.addEventListener('keydown', e => e.stopPropagation());
+                inp.addEventListener('keyup', e => e.stopPropagation());
+                inp.addEventListener('keypress', e => e.stopPropagation());
                 row.appendChild(inp); sec.appendChild(row); return controls;
             },
             dropdown(label, dataArray, actionBtnLabel, secLabel, onSelect) {

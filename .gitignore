@@ -1,0 +1,46 @@
+# Dependency directories
+node_modules/
+jspm_packages/
+
+# Electron packaging and build outputs
+dist/
+build/
+release/
+out/
+release-builds/
+*.dmg
+*.pkg
+*.exe
+*.deb
+*.rpm
+*.app
+*.zip
+
+# Native build tools
+/build/config.gypi
+/.lock-wscript
+
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Environment local secrets
+.env
+.env.local
+.env.production
+*.pem
+*.pfx
+
+# IDEs, editors and OS metadata
+.idea/
+.vscode/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+.DS_Store
+Thumbs.db

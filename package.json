@@ -1,0 +1,25 @@
+{
+  "name": "eyukon-terminal",
+  "version": "1.0.0",
+  "description": "",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron ."
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Arskiz/EYukon-Terminal.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/Arskiz/EYukon-Terminal/issues"
+  },
+  "homepage": "https://github.com/Arskiz/EYukon-Terminal#readme",
+  "devDependencies": {
+    "electron": "^42.4.0",
+    "electron-reload": "^2.0.0-alpha.1"
+  }
+}

@@ -230,10 +230,93 @@
     }
 
     function runPlayerTrackerLoop() {
-        if(window.__client && window.__client?.world?.room?.penguins){
-            window.playerList = window.__client.world.room.penguins;
+        if(window.__client && window.__client?.world?.room?.penguins) {
+            let ogPenguins = window.__client.world.room.penguins;
+            
+            // Shallow clone the main list (handles both arrays and objects)
+            let pList = Array.isArray(ogPenguins) ? [...ogPenguins] : {...ogPenguins};
+            
+            let myId = __client.penguin.id;
+            
+            // Only clone YOUR penguin so we can safely fuck with it
+            if(pList[myId]) {
+                pList[myId] = {...pList[myId]}; // 🧠 big brain shallow clone
+                
+                if(!pList[myId].username.includes("(self)")) {
+                    pList[myId].username += " (self)";
+                }
+            }
+            
+            window.playerList = pList;
         }
         setTimeout(runPlayerTrackerLoop, 1000);
+    }
+
+    function runPlayerCustomizationLoop() {
+        if(window.playerCustomization && Object.keys(window.playerCustomization).length > 0) {
+            if(window.__client && window.__client?.world?.room?.penguins) {
+                // Pull the weird object and turn it into a clean array 💯
+                let rawPenguins = window.__client.world.room.penguins;
+                let pList = Array.isArray(rawPenguins) ? [...rawPenguins] : Object.values({...rawPenguins});
+
+                let myId = __client.penguin.id; // Still got this if u need it later
+                
+                pList.forEach(penguin => {
+                    // Make sure the case matches your actual array (playerCustomization)
+                    let customIndex = window.playerCustomization.findIndex(custom => custom.id === penguin.id);
+
+                    // If customIndex ain't -1, that means we found the motherfucker
+                    if(customIndex !== -1) {
+                        customizePenguin(penguin, customIndex);
+                    }
+                });
+            }
+        }
+        
+        setTimeout(runPlayerCustomizationLoop, 1000);
+    }
+
+    function customizePenguin(playerObj, index) {
+        
+        // 🧠 9000 IQ play: Just grab the player directly using the index you passed
+        let customPlayer = window.playerCustomization[index];
+
+        // If they ain't got mods or don't exist, get the fuck out
+        if (!customPlayer || !customPlayer.mods) return;
+
+        // Now we loop through their actual MODS, not the lobby index 💀
+        customPlayer.mods.forEach(mod => {
+            switch(mod.name) {
+                // --- Name Spoofing ---
+                case "name-spoof":
+                    // Make sure window.__wc ain't a typo for window.__client bro
+                    let spoofedName = mod.action;
+                    
+                    if (window.__wc?.world?.room?.penguins[customPlayer.id]) {
+                        window.__wc.world.room.penguins[customPlayer.id].nameTag.setText(spoofedName);
+                        window.__wc.world.room.penguins[customPlayer.id].username = spoofedName;
+                        _MM_Log(`Set playerID ${customPlayer.id}'s name to "${spoofedName}".`);
+                    }
+                    else
+                    {
+                        _MM_Error(`Error: player ${playerObj.username} is not on the room!`);
+                    }
+                    
+                break;
+                // --- Player Scaling
+                case "scale-spoof":
+                    let targetSize = mod.action;
+                    if (window.__wc?.world?.room?.penguins[customPlayer.id]) {
+                        window.__wc.world.room.penguins[customPlayer.id].setScale(targetSize, targetSize, targetSize);
+                        _MM_Log(`Set playerID ${customPlayer.id}'s scale to "${targetSize}".`);
+                    }
+                    else
+                    {
+                        _MM_Error(`Error: player ${playerObj.username} is not on the room!`);
+                    }
+
+            }
+        });
     }
 
     function hookSocketIncoming() {
@@ -272,11 +355,34 @@
         return slots[id] || null;
     }
 
+    class PlayerCustomization {
+            constructor(id, spoofing = false, mods = []) {
+                this.id = id; 
+                this.spoofing = spoofing; 
+                this.mods = mods; 
+            }
+        }
+
+        class CustomizationMod {
+            constructor(name, enabled = false, action) {
+                this.name = name; 
+                this.enabled = enabled; 
+                this.action = action; 
+            }
+        }
+
+    window.playerCustomization = [];
+
     function openPlayerProfile(p) {
+        
+
+        
+        
         const profileWin = window.PenguinUI.Window(`Info: ${p.username || p.realUsername}`, { width: '280px', x: 'center', noFooter: true });
         
         const infoTab = profileWin.addTab("Stats");
         const joinDate = p.joinTime ? new Date(p.joinTime).toLocaleDateString() : 'Unknown';
+        let penguinObj = `penguinS_Name_${p.id}`;
 
         infoTab.section("Identity & Economy", "Core Database Records")
             .input("Player ID", `prof_id_${p.id}`, p.id || 0)
@@ -287,7 +393,7 @@
 
         const ninjaTab = profileWin.addTab("Ninja");
         ninjaTab.section("Card Jitsu History", "Rage quits, etc..")
-            .input("Rank", `prof_rank_${p.id}`, (p.highestNinjaRank || 0) + " - " + ninjaRankToString(p.highestNinjaRank))
+            .input("Rank", `prof_rank_${p.id}`, (p.highestNinjaRank || 0) + " | " + ninjaRankToString(p.highestNinjaRank))
             .input("Matches Played", `prof_matches_${p.id}`, p.ninjaMatchesPlayed || 0)
             .input("Rage Quits", `prof_rq_${p.id}`, p.cardJitsuDisconnects || 0);
 
@@ -307,7 +413,7 @@
             .multiButton(["Steal Items", "Spoof steal items"], "green", [
                 () => {
                     const confirmModal = window.PenguinUI.Window("Confirm Window", { width: '320px', noFooter: true, noTabs: true });
-                    confirmModal.section("WARNING", "You are about to add Operator's worn items. This might get you banned.")
+                    confirmModal.section("WARNING", `You are about to add ${p.username}'s worn items. This might get you banned.`)
                         .multiButton(["YES", "NO"], null, [
                             () => confirmModal.close(),
                             () => confirmModal.close()
@@ -335,8 +441,52 @@
             .button("📡 Dump Raw Data to Console", "yellow", () => {
                 console.log(`%c[Terminal] %cRaw data for ${p.username}:`, "color:#ff0055;font-weight:bold;", "", p);
                 window.PenguinUI.showNotification(`Check devtools for raw JSON.`);
-            })
-            .checkbox("Copy player movement", "copy_mov", false, () => {});
+            });
+
+            //.checkbox("Copy player movement", "copy_mov", false, () => {});
+        
+        const customizationTab = profileWin.addTab("Customization");
+        let p_spoof_name = `penguinS_Name_${p.id}`;
+        let p_spoof_scale = `penguinS_Scale_${p.id}`;
+
+        customizationTab.section("Customize da penguin")
+            .input("Name Spoofing", `penguinS_Name_${p.id}`, "", "ex: Rockhopper | Rookie ... etc", val => { p_spoof_name = val; })
+            .button("Spoof their name", "spoof-name", () => applyCustomMod(p, "name-spoof", p_spoof_name))
+            .input("Player Scale", `penguinS_Scale_${p.id}`, 1, "ex: 5 | 1 ... etc", val => { p_spoof_scale = val; })
+            .button("Spoof scale", "spoof-scale", () => applyCustomMod(p, "scale-spoof", p_spoof_scale));
+
+        function applyCustomMod(player, modName, modValue) {
+            // Guard clause: no player? get the fuck out
+            if (!player) return;
+
+            let myId = player.id;
+            
+            // Find out if bro is already in the array
+            let existingPlayer = window.playerCustomization.find(pe => pe.id === myId);
+
+            if (existingPlayer) {
+                existingPlayer.spoofing = true; // Flag him as a spoofed opp
+                
+                // Look for the specific mod (like "name-spoof" or "scale-hack")
+                let existingMod = existingPlayer.mods.find(m => m.name === modName);
+                
+                if (existingMod) {
+                    // Just update the value if he already has this specific hack active
+                    existingMod.action = modValue;
+                    existingMod.enabled = true;
+                } else {
+                    // Bro doesn't have this hack yet, shove it in his mods array
+                    existingPlayer.mods.push(new CustomizationMod(modName, true, modValue));
+                }
+            } else {
+                // First time ever fucking with this penguin. Create a fresh blueprint.
+                window.playerCustomization.push(
+                    new PlayerCustomization(myId, true, [
+                        new CustomizationMod(modName, true, modValue)
+                    ])
+                );
+            }
+        }
     }
 
     function initMenu() {
@@ -353,18 +503,12 @@
         .filteredList("Username", "ID", () => Object.values(window.playerList || {}), (playerObject) => { openPlayerProfile(playerObject); }, true);
 
         const coinOptions = []; for(let i = 1; i< 100; i++) coinOptions.push({ data1: i * 50, data2: 2000 * i});
-        let p_profile_id = window.PenguinUI.Config.get("penguinP_ID");
-        let p_spoof_name = "";
         let tp_ms = window.PenguinUI.Config.get("tp-ms");
 
         general.section("Player", "Player options")
             .checkbox("Anti Afk Kick", "anti-afk_enabled", false, val => initiateAntiAFKKick(val))
             .input("Penguin profile ID", "penguinP_ID", "", "ID...", val => { p_profile_id = val; })
-            .button("Open Penguin Profile", "p_profile_open", () => sendPacket("get_player", {id: parseInt(p_profile_id)}))
-            .input("Spoof your name", "penguinS_Name", "", "Name...", val => { p_spoof_name = val; })
-            .button("Spoof name", "spoof-name", val => {
-                if (window.__client?.penguin?.nameTag) window.__client.penguin.nameTag.setText(window.PenguinUI.Config.get("penguinS_Name"));
-            });
+            .button("Open Penguin Profile", "p_profile_open", () => sendPacket("get_player", {id: parseInt(p_profile_id)}));
 
         general.section("Fun", "Such as fast tp etc..")
             .slider("Teleport Delay (ms)", "tp_delay", 0, 1000, 450, val => { tp_ms = val; })
@@ -443,5 +587,6 @@
     runStatusCheckLoop();
     hookSocketIncoming();
     runPlayerTrackerLoop(); 
+    runPlayerCustomizationLoop();
     if (document.body) initMenu(); else document.addEventListener('DOMContentLoaded', initMenu);
 })();

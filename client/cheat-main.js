@@ -273,7 +273,7 @@
             }
         }
         
-        setTimeout(runPlayerCustomizationLoop, 1000);
+        setTimeout(runPlayerCustomizationLoop, 500);
     }
 
     function customizePenguin(playerObj, index) {
@@ -383,12 +383,15 @@
         const infoTab = profileWin.addTab("Stats");
         const joinDate = p.joinTime ? new Date(p.joinTime).toLocaleDateString() : 'Unknown';
         let penguinObj = `penguinS_Name_${p.id}`;
+        const restriction = p.safeChat === 0 ? "None" : "Safe Chat Enabled";
 
-        infoTab.section("Identity & Economy", "Core Database Records")
+        infoTab.section("Identity", "Core Database Records")
             .input("Player ID", `prof_id_${p.id}`, p.id || 0)
+            .input("Registered Username", `prof_rname_${p.id}`, p.realUsername || "Unknown")
             .input("Coins", `prof_coins_${p.id}`, p.coins || 0)
             .input("Login Streak", `prof_streak_${p.id}`, p.loginStreak || 0)
             .input("Join Date", `prof_join_${p.id}`, joinDate)
+            .input("Restrictions", `prof_restr_${p.id}`, restriction)
             .button("Open Profile", null, () => sendPacket("get_player", {id: parseInt(p.id)}));
 
         const ninjaTab = profileWin.addTab("Ninja");

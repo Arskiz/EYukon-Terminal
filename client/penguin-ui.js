@@ -282,8 +282,12 @@ window.PenguinUI = (function () {
             box.insertAdjacentHTML('beforeend', '<span id="minimized-text" style="color: #fff; font-size: 11px; font-weight: bold; text-transform: uppercase; letter-spacing: 1px; z-index: 10;">X-YUKON</span>');                
             
         }
+        if(!window.welcomeShown){
+            window.PenguinUI.showNotification(`Welcome to ${trainerName} ${trainerVersion}!`);
+            window.welcomeShown = true;
+        }
+            
 
-        window.PenguinUI.showNotification(`Welcome to ${trainerName} ${trainerVersion}!`);
 
         header.addEventListener('mousedown', e => {
             if (minimised) return;

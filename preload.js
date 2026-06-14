@@ -1,6 +1,22 @@
-const { webFrame } = require('electron');
+const { webFrame, ipcRenderer, contextBridge } = require('electron');
 const fs = require('fs');
 const path = require('path');
+
+try {
+    contextBridge.exposeInMainWorld('PenguinBridge', {
+        nukeApp: () => ipcRenderer.send('quit-game'),
+        toggleMaximize: () => ipcRenderer.send('toggle-maximize'),
+        toggleMinimize: () => ipcRenderer.send('toggle-minimize')
+
+    });
+} catch (e) {
+    // Just in case contextIsolation is off and it bitches at you
+    window.PenguinBridge = { 
+        nukeApp: () => ipcRenderer.send('quit-game'),
+        toggleMaximize: () => ipcRenderer.send('toggle-maximize'),
+        toggleMinimize: () => ipcRenderer.send('toggle-minimize')
+    };
+}
 
 // Read the scripts
 const uiLibCode = fs.readFileSync(path.join(__dirname, 'client', 'penguin-ui.js'), 'utf-8');
@@ -22,6 +38,177 @@ const passImageData = `window._MM_MinImage = "data:image/png;base64,${minImageBa
 const coreHooks = `
     const _NativeLog = window.console.log;
     const _NativeError = window.console.error;
+
+    window.addEventListener('DOMContentLoaded', () => {
+
+        // Inject font
+        document.getElementsByTagName('head')[0].innerHTML += \`
+            <link rel="preconnect" href="https://fonts.googleapis.com">
+            <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+            <link href="https://fonts.googleapis.com/css2?family=Balsamiq+Sans:ital,wght@0,400;0,700;1,400;1,700&display=swap" rel="stylesheet">
+        \`;
+
+        const titleBar = document.createElement('div'); 
+        titleBar.id = "titleBar";
+        titleBar.style.cssText = \`
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 30px;
+            background: #008ce1; 
+            color: #ffffff;
+            display: flex;
+            justify-content: space-between; /* Spreads the items out */
+            align-items: center;
+            box-sizing: border-box;
+            border-top: 2.2px solid #007ad2; 
+            border-top-left-radius: 7px;
+            border-top-right-radius: 7px;
+            font-family: "Balsamiq Sans", sans-serif;
+            letter-spacing: 1px;
+            z-index: 9999999; 
+            -webkit-app-region: drag; 
+            user-select: none; 
+            padding: 0 10px; /* Adds breathing room on the edges */
+        \`;
+        
+        // 🔥 THE SAUCE: Added the <select> dropdown 🔥
+        titleBar.innerHTML = \`
+            <span id="penguin-title-text" style="font-size: 13px; font-weight: bold;">X-Yukon Client</span>
+            
+            <select id="server-selector">
+                <option value="https://play.cplegacy.com">CPLegacy</option>
+                <option value="https://play.cpjourney.net">CPJourney</option>
+            </select>
+            <button id="penguin-minimize-btn">—</button>
+            <button id="penguin-maximize-btn">□</button>
+            <button id="penguin-quit-btn">✕</button>
+        \`;
+
+        // Inject the CSS for the new dropdown and existing buttons
+        const styleTag = document.createElement('style');
+        styleTag.innerHTML = \`
+            #titleBar:hover
+            {
+                cursor: pointer !important;
+            }
+            #penguin-maximize-btn,  #penguin-quit-btn, #penguin-minimize-btn{
+                font-family: "Balsamiq Sans", sans-serif;
+                position: fixed;
+                width: 24px;
+                height: 24px;
+                background: #007ad2; 
+                color: #ffffff; 
+                text-shadow: none;
+                border: 2px #252525 !important; 
+                border-radius: 4px;
+                cursor: pointer;
+                font-size: 15px;
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                padding: 0;
+                -webkit-app-region: no-drag; 
+                transition: all 0.15s ease-in-out; 
+            }
+            #penguin-minimize-btn{
+                right: 56px;
+            }
+            #penguin-maximize-btn{
+                right: 30px;
+                font-size: 20px;
+            }
+            #penguin-quit-btn {
+                right: 4px;
+            }
+            #penguin-quit-btn:hover, #penguin-maximize-btn:hover, #penguin-minimize-btn:hover { background: #0070c0 !important; color: #ffffff !important; }
+            
+            /* 🔥 DRIP FOR THE SERVER SWITCHER 🔥 */
+            #server-selector {
+                position: fixed;
+                top: 5px;
+                left: 50%;
+                transform: translateX(-50%);
+                background: #007ad2;
+                color: #ffffff;
+                border: 1px solid #22a4f3;
+                border-radius: 4px;
+                padding: 2px 6px;
+                font-size: 11px;
+                font-weight: bold;
+                outline: none;
+                text-align: center;
+                cursor: pointer;
+                -webkit-app-region: no-drag; /* 🛑 STOPS IT FROM DRAGGING THE WINDOW */
+                transition: border-color 0.2s;
+                font-family: Consolas, monospace;
+                text-transform: uppercase;
+            }
+            body::-webkit-scrollbar {
+                width: 12px !important;
+            }
+            body::-webkit-scrollbar-track {
+                background: #007ad2 !important;
+            }
+            body::-webkit-scrollbar-thumb {
+                background-color: #008ce1 !important;
+                border-radius: 2px !important;
+                border: 3px solid transparent !important;
+            }
+
+            #server-selector:hover { border-color: #51bcff; }
+            #server-selector option { background: #007ad2; color: #fff; }
+        \`;
+        document.head.appendChild(styleTag);
+        document.documentElement.prepend(titleBar);
+
+        // 🔥 LOGIC: Match the dropdown to the server you are currently playing 🔥
+        const serverSelector = titleBar.querySelector("#server-selector");
+        if (window.location.hostname.includes("cpjourney")) {
+            serverSelector.value = "https://play.cpjourney.net";
+        } else {
+            serverSelector.value = "https://play.cplegacy.com";
+        }
+
+        // 🔥 LOGIC: Yeet the user to the new server when they click it 🔥
+        serverSelector.addEventListener('change', (e) => {
+            const newUrl = e.target.value;
+            // Only reload if it's actually a different server
+            if (!window.location.href.includes(newUrl)) {
+                console.log(\`Swapping servers to \${newUrl}... 🚀\`);
+                window.location.href = newUrl;
+            }
+        });
+
+        // Titlebar buttons
+        const quitBtn = titleBar.querySelector("#penguin-quit-btn");
+        const maximizeBtn = titleBar.querySelector("#penguin-maximize-btn");
+        const minimizeBtn = titleBar.querySelector("#penguin-minimize-btn");
+        quitBtn.onclick = () => {
+            if (window.PenguinBridge) window.PenguinBridge.nukeApp();
+            else window.close(); 
+        };
+        maximizeBtn.onclick = () => {
+            if (window.PenguinBridge) window.PenguinBridge.toggleMaximize();
+            else window.close(); 
+        };
+        minimizeBtn.onclick = () => {
+            if (window.PenguinBridge) window.PenguinBridge.toggleMinimize();
+            else window.close();
+        };
+
+
+        // Fix the body scrolling logic
+        document.documentElement.style.overflow = 'hidden';
+        if (document.body) {
+            document.body.style.marginTop = '30px';
+            document.body.style.height = 'calc(100vh - 30px)'; 
+            document.body.style.overflowY = 'auto'; 
+            document.body.style.overflowX = 'hidden'; 
+            document.body.style.boxSizing = 'border-box';
+        }
+    });
 
     window._MM_Log = function(...args) {
         _NativeLog.apply(window.console, ['%c[Penguin Terminal]%c', "color: #00ff00; font-weight: bold;", "", ...args]);

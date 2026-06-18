@@ -120,7 +120,11 @@ window.PenguinUI = (function () {
             image-rendering: crisp-edges !important;
             box-shadow: 0 0 10px #008ce1 !important; 
             cursor: pointer !important;
-            }
+        }
+        .mm-box.mm-minimized:hover{
+            background: #007ad2 !important;
+            border: 1px solid #008ce1 !important; 
+        }
         .mm-box.mm-minimized .mm-header, .mm-box.mm-minimized .mm-tabs, .mm-box.mm-minimized #mm-functional-panel, .mm-box.mm-minimized .mm-footer { display: none !important; }
         .mm-toast-container { position: fixed; bottom: 20px; right: 20px; z-index: 1000000; display: flex; flex-direction: column; gap: 10px; pointer-events: none; }
         .mm-toast { background: rgba(20, 20, 20, 0.85); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); border-left: 4px solid var(--mm-theme); border-top: 1px solid rgba(255,255,255,0.05); color: #fff; padding: 12px 18px; font-family: Arial, sans-serif; font-size: 12px; font-weight: bold; border-radius: 4px; box-shadow: 0 8px 24px rgba(0,0,0,0.5); transform: translateX(125%); transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.35s ease; opacity: 0; display: flex; align-items: center; gap: 8px; }
@@ -198,8 +202,13 @@ window.PenguinUI = (function () {
 
         // Optimized state flags for requestAnimationFrame sleep
         let isPhysicsActive = true; 
+            const minBtn = document.createElement('button'); 
+            if(!opts.minDisabled){
+                            minBtn.className = 'mm-btn-min';
+                minBtn.textContent = '_';
+            }
 
-        const minBtn = document.createElement('button'); minBtn.className = 'mm-btn-min'; minBtn.textContent = '_';
+        
         
         function wakePhysics() {
             if (!isPhysicsActive) {
@@ -230,7 +239,7 @@ window.PenguinUI = (function () {
             }
             wakePhysics();
         }
-        minBtn.onclick = (e) => { e.stopPropagation(); toggleMinimize(); };
+        if(!opts.minDisabled) minBtn.onclick = (e) => { e.stopPropagation(); toggleMinimize(); };
         box.onclick = () => { if (minimised) toggleMinimize(); };
 
         const closeBtn = document.createElement('button'); 
@@ -243,7 +252,8 @@ window.PenguinUI = (function () {
             setTimeout(() => box.remove(), 250); 
         };
 
-        header.appendChild(minBtn); header.appendChild(closeBtn);
+        if(!opts.minDisabled) header.appendChild(minBtn);
+        header.appendChild(closeBtn);
 
         const inner = document.createElement('div'); 
         if (!opts.noFooter) {

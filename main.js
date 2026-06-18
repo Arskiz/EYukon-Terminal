@@ -1,45 +1,21 @@
-const { app, Menu, BrowserWindow, ipcMain } = require('electron');
+const { app, Menu, BrowserWindow, ipcMain, crashReporter } = require('electron');
 const path = require('path');
+
+
+// BOOT UP THE FED TRACKER 🚓
+crashReporter.start({
+  submitURL: '', // Leave empty, we ain't sending this to a server
+  uploadToServer: false,
+  compress: false
+});
+
+console.log("Crash dumps will be saved here: ", app.getPath('crashDumps'));
 
 // LIVE SERVER / HOT RELOAD SAUCE 🚀
 // This monitors the whole directory and refreshes the app on save
 require('electron-reload')(__dirname, {
   electron: path.join(__dirname, 'node_modules', '.bin', 'electron')
 });
-
-const menu_template = [
-  {
-    label: 'Application',
-    submenu: [
-      { label: 'Exit',
-        role: 'quit'
-       }
-    ]
-  },
-  {
-    label: 'Window',
-    submenu: [
-      { label: 'Hard Reload App',
-        click: (item, win) => win && win.reload()
-      
-      },
-      {
-        label: 'Toggle audio',
-        click: (item, win) => {
-          if(win.webContents.audioMuted) win.webContents.setAudioMuted(false); else win.webContents.setAudioMuted(true);
-        }
-      },
-      {
-        label: 'Toggle FullScreen',
-        click: (item, win) => {
-          if (win) {
-              win.isMaximized() ? win.unmaximize() : win.maximize();
-          }
-        }
-      }
-    ]
-  }
-]
 
 ipcMain.on('quit-game', () => {
     //console.log("Kill signal received from UI. Yeeting the app 💀");
@@ -57,6 +33,7 @@ ipcMain.on('toggle-minimize', () => {
 });
 
 
+
 function createWindow() {
   const win = new BrowserWindow({
     titleBarStyle: 'hidden',
@@ -70,15 +47,57 @@ function createWindow() {
       nodeIntegration: false,
       contextIsolation: true,
       sandbox: false,
-      preload: path.join(__dirname, 'preload.js')
+      preload: path.join(__dirname, 'preload.js'),
+      webSecurity: false,
     }
+  });
+
+  win.webContents.on('render-process-gone', (event, details) => 
+    {
+      console.log("Reason:", details.reason);
+      console.log("Exit Code:", details.exitCode);
+
+      const { dialog } = require('electron');
+      
+      dialog.showMessageBox({
+          type: 'error',
+          title: 'X-Yukon Client Crashed',
+          message: 'The renderer process crashed.',
+          detail: `Reason: ${details.reason}\nExit Code: ${details.exitCode}\n\nThis is a known problem mostly occurring with the yukon and Ruffle interacting with each other and loading .wasm files and has nothing to do with X-Yukon itself. Most likely you got here from clicking the newspaper ingame. Report it to the CPLegacy devs to address this.`,
+          buttons: ['Reload X-Yukon', 'Quit the app'],
+          defaultId: 0,
+      }).then(result => {
+          if (result.response === 0) {
+              win.reload();
+          } else {
+              app.quit();
+          }
+      });
+  });
+
+  win.on('unresponsive', () => {
+      const { dialog } = require('electron');
+      dialog.showMessageBox({
+          type: 'error',
+          title: 'X-Yukon Client Crashed',
+          message: 'The renderer process crashed.',
+          detail: `Reason: ${details.reason}\nExit Code: ${details.exitCode}\n\nThis is a known problem mostly occurring with the yukon and Ruffle interacting with each other and loading .wasm files and has nothing to do with X-Yukon itself. Most likely you got here from clicking the newspaper ingame. Report it to the CPLegacy devs to address this.`,
+          buttons: ['Reload X-Yukon', 'Quit the app'],
+          defaultId: 0,
+      }).then(result => {
+          if (result.response === 0) {
+              win.reload();
+          } else {
+              app.quit();
+          }
+      });
   });
 
   win.loadURL('https://play.cplegacy.com'); 
 
   var splash = new BrowserWindow({
-     width: 500, 
-     height: 300, 
+     width: 600, 
+     height: 350, 
      transparent: true, 
      frame: false, 
      alwaysOnTop: true 
@@ -111,11 +130,13 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
-  const menu = Menu.buildFromTemplate(menu_template);
-  Menu.setApplicationMenu(menu);
   createWindow();
 });
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
 });
+
+app.commandLine.appendSwitch('disable-renderer-backgrounding');
+app.commandLine.appendSwitch('disable-backgrounding-occluded-windows');
+app.commandLine.appendSwitch('no-sandbox');

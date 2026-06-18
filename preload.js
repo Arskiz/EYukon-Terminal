@@ -82,7 +82,11 @@ const coreHooks = `
                 <option value="https://play.cpjourney.net">CPJourney</option>
             </select>
             <button id="penguin-minimize-btn">—</button>
-            <button id="penguin-maximize-btn">□</button>
+            <button id="penguin-maximize-btn">
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <rect x="1.5" y="1.5" width="9" height="9" stroke="currentColor" stroke-width="1.0" rx="1"/>
+                </svg>
+            </button>
             <button id="penguin-quit-btn">✕</button>
         \`;
 
@@ -101,7 +105,7 @@ const coreHooks = `
                 background: #007ad2; 
                 color: #ffffff; 
                 text-shadow: none;
-                border: 2px #252525 !important; 
+                border: 1px solid #0070c0 !important; 
                 border-radius: 4px;
                 cursor: pointer;
                 font-size: 15px;
@@ -109,6 +113,7 @@ const coreHooks = `
                 justify-content: center;
                 align-items: center;
                 padding: 0;
+                line-height: 0;
                 -webkit-app-region: no-drag; 
                 transition: all 0.15s ease-in-out; 
             }
@@ -223,17 +228,28 @@ const coreHooks = `
     const _NativeWS = window.WebSocket;
     window._MM_SOCKETS = [];
 
-    window.WebSocket = class extends _NativeWS {
-        constructor(url, protocols) {
-            super(url, protocols);
-            window._MM_SOCKETS.push(this);
-            this.addEventListener('close', () => {
-                const i = window._MM_SOCKETS.indexOf(this);
-                if (i !== -1) window._MM_SOCKETS.splice(i, 1);
-            });
+    window.WebSocket = new Proxy(_NativeWS, {
+        construct(target, args) {
+            const ws = new target(...args);
+            const url = args[0] || '';
+
+            const isRuffle = typeof url === 'string' && (
+                url.startsWith('ws://localhost') ||
+                url.startsWith('wss://localhost') ||
+                url.includes('ruffle')
+            );
+            
+            if (!isRuffle) {
+                window._MM_SOCKETS.push(ws);
+                ws.addEventListener('close', () => {
+                    const i = window._MM_SOCKETS.indexOf(ws);
+                    if (i !== -1) window._MM_SOCKETS.splice(i, 1);
+                });
+            }
+            
+            return ws;
         }
-        send(payload) { super.send(payload); }
-    };
+    });
 
 
     window._MM_sendRaw = function(bytes) {
@@ -244,11 +260,6 @@ const coreHooks = `
         window._MM_SOCKETS.forEach(s => s.send(bytes));
         return true;
     };
-
-    
-
-    // Hook the game engine
-    
 `;
 
 // 3. Dependency Loader (Fetches msgpack)

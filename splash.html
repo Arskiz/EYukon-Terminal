@@ -1,5 +1,4 @@
 <html>
-
 <head>
     <meta charset="UTF-8">
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -7,25 +6,53 @@
     <link href="https://fonts.googleapis.com/css2?family=Balsamiq+Sans:ital,wght@0,400;0,700;1,400;1,700&display=swap" rel="stylesheet">
 </head>
 <body>
-    <h3>Booting X-Yukon...</h3>
-<div class="loader"></div>
+    <div class="wrapper">
+        <header>
+            <h3>Preparing X-Yukon...</h3>
+        </header>
+        <div class="splashWin">
+            <div class="loader"></div>
+        </div>
+    </div>
+</body>
 </html>
 <style>
     body {
-    background: #2A7B9B;
-    background: linear-gradient(41deg,rgba(42, 123, 155, 1) 0%, rgba(34, 164, 243, 1) 100%);
+        background: transparent;
+        margin: 0px;
+        overflow: hidden;
     }
 
-    h3{
+    .wrapper {
+        border-radius: 20px;
+        overflow: hidden;
+        width: 600px;
+        height: 350px;
+        display: flex;
+        flex-direction: column;
+    }
+
+    header {
+        display: flex;
+        width: 100%;
+        flex-direction: column;
+        justify-content: left;
+        background-color: #007ad2;
+    }
+
+    h3 {
         font-family: "Balsamiq Sans", sans-serif;
         color: #ffffff;
+        font-size: large;
+        margin-left: 10px;
     }
 
-    .flex {
-        -webkit-box-flex: 1;
-        -ms-flex: 1 1 auto;
-        flex: 1 1 auto
-    }   
+    .splashWin {
+        background-color: #22a4f3;
+        flex-grow: 1;
+        position: relative;
+    }
+
     .loader {
         border: 5px solid rgba(18, 65, 145, 255);
         border-radius: 50%;
@@ -33,22 +60,19 @@
         width: 40px;
         height: 40px;
         -webkit-animation: spin 1s linear infinite;
-        /* Safari */
         animation: spin 1s linear infinite;
         margin: auto;
+        position: absolute;
         left: 0;
         right: 0;
-        top: 0px;
+        top: 0;
         bottom: 0;
-        position: fixed;
     }
 
-    /* Safari */
     @-webkit-keyframes spin {
         0% {
             -webkit-transform: rotate(0deg);
         }
-
         100% {
             -webkit-transform: rotate(360deg);
         }
@@ -58,14 +82,8 @@
         0% {
             transform: rotate(0deg);
         }
-
         100% {
             transform: rotate(360deg);
         }
-    }
-
-    .center {
-        border: none !important;
-        text-align: center;
     }
 </style>

@@ -330,40 +330,80 @@
     function hookSocketIncoming() {
         if (!window._MM_SOCKETS || window._MM_SOCKETS.length === 0) return setTimeout(hookSocketIncoming, 1000);
 
-        if (!window._MM_sendRawHooked) {
-            window._MM_sendRawHooked = true;
-            const original_MM_sendRaw = window._MM_sendRaw;
+        // 🛑 NUKE the old _MM_sendRaw hook. We are hijacking the raw WebSocket prototype now. 🧠
+        if (!window.__WSSendHooked) {
+            window.__WSSendHooked = true;
+            const originalWSSend = WebSocket.prototype.send;
 
-            window._MM_sendRaw = function (bytes) {
+            WebSocket.prototype.send = function (data) {
+                // ⚠️ CRITICAL: If a BOT is sending this packet, just send it normally!
+                // If we don't ignore bot sockets here, they will echo themselves into an infinite crash loop.
+                if (this.botUser) {
+                    return originalWSSend.call(this, data);
+                }
+
                 try {
-                    // 🛑 ONLY decode binary arrays. Strings will crash msgpack and break the hook!
-                    if (bytes instanceof ArrayBuffer || bytes instanceof Uint8Array) {
-                        const u8 = new Uint8Array(bytes);
+                    if (data instanceof ArrayBuffer || data instanceof Uint8Array) {
+                        const u8 = new Uint8Array(data);
                         const decoded = window.msgpack.decode(u8);
 
+                        // Sniffer catches literally EVERYTHING now. Massive W.
                         if (snifferRecording) logPacket('OUT', decoded);
 
-                    } else if (typeof bytes === 'string') {
-                        // Log string heartbeats without crashing
-                        if (snifferRecording) logPacket('OUT', { data: bytes });
-                    }
-                } catch (e) { console.error("Hook error:", e); }
+                        // 👇 THE REAL HIVEMIND LOGIC 👇
+                        if (decoded && decoded.type === 2 && decoded.data && decoded.data[0] === 'message') {
+                            const cmd = decoded.data[1];
+                            const payload = decoded.data[2];
 
-                return original_MM_sendRaw(bytes);
+                            // Notice we added (ws, idx) so we can count the bots 🧠
+                            if (cmd === 'join_room' && window.global_copying_rooms) {
+                                window.myActiveBots.forEach((ws, idx) => {
+                                    if (ws.readyState === 1) {
+                                        setTimeout(() => {
+                                            ws.send(window.msgpack.encode({ type: 2, data: ['message', 'join_room', payload], options: { compress: true }, nsp: '/' }));
+                                        }, idx * 50); // 50ms delay multiplied by bot number so they stagger in like a real squad
+                                    }
+                                });
+                            }
+                            
+                            if (cmd === 'join_igloo' && window.global_copying_igloos) {
+                                window.myActiveBots.forEach((ws, idx) => {
+                                    if (ws.readyState === 1) {
+                                        setTimeout(() => {
+                                            ws.send(window.msgpack.encode({ type: 2, data: ['message', 'join_igloo', payload], options: { compress: true }, nsp: '/' }));
+                                        }, idx * 50);
+                                    }
+                                });
+                            }
+                        }
+                    } else if (typeof data === 'string') {
+                        // Log string heartbeats without bricking the decoder
+                        if (snifferRecording) logPacket('OUT', { data: data });
+                    }
+                } catch (e) { 
+                    // console.error("WS Hook error:", e); 
+                }
+
+                return originalWSSend.call(this, data);
             };
         }
 
+        // Hook incoming data for the sniffer
         window._MM_SOCKETS.forEach(socket => {
             if (socket.isFullyHooked) return;
             socket.isFullyHooked = true;
             socket.addEventListener('message', function (e) {
                 try {
+                    // Ignore incoming bot packets for the sniffer so it doesn't get cluttered with bot spam
+                    if (this.botUser) return; 
+
                     if (!snifferRecording || !(e.data instanceof ArrayBuffer)) return;
                     const decoded = window.msgpack.decode(new Uint8Array(e.data));
                     logPacket('IN', decoded);
                 } catch (err) { }
             });
         });
+
         setTimeout(hookSocketIncoming, 2000);
     }
 
@@ -717,6 +757,20 @@
                     }
                 });
 
+            statusTab.section("Danger Zone", "Wipe this mf off the map")
+                .button("Delete Bot from List", "red", () => {
+                    // Filter the opp out of our saved array
+                    savedBots = savedBots.filter(b => b.username !== bot.username);
+                    window.PenguinUI.Config.set("bot-list", savedBots);
+                    
+                    // Disconnect if bro is currently online
+                    const ws = window.myActiveBots.find(s => s.botUser === bot.username);
+                    if (ws) ws.close();
+                    
+                    window.PenguinUI.showNotification(`Bot ${bot.username} sent to the shadow realm 💀`);
+                    win.close(); // Nuke the window fr
+                });
+
             controlTab.section("Navigation", "Room controls")
                 .filteredList("Name", "ID", () => parsedRoomsArray, (room) => {
                     const ws = window.myActiveBots.find(s => s.botUser === bot.username);
@@ -831,6 +885,118 @@
             }, 100);
         }
 
+        function openGlobalBotManagement() {
+            const win = window.PenguinUI.Window(`Global Commander 🌐`, { width: '280px', x: 'center', noFooter: true, minDisable: true });
+            const statusTab = win.addTab("Bot Status");
+            const controlTab = win.addTab("Control");
+
+            statusTab.section("Mass Deployment", "Send the whole squad in")
+                .button("CONNECT ALL", "green", () => {
+                    let savedBots = window.PenguinUI.Config.get("bot-list") || [];
+                    savedBots.forEach(b => {
+                        if (!window.myActiveBots.some(ws => ws.botUser === b.username)) {
+                            spawnBot(b.username, b.password);
+                        }
+                    });
+                    window.PenguinUI.showNotification("Deploying the whole damn army 😈🚀");
+                })
+                .button("DISCONNECT ALL", "red", () => {
+                    window.myActiveBots.forEach(s => s.close());
+                    window.myActiveBots = [];
+                    window.PenguinUI.showNotification("Whole squad disconnected 🛑");
+                });
+
+            // Global variables for the hivemind inputs
+            let globalMsgToSend = window.PenguinUI.Config.get(`global_bot_msg`) || "";
+            let globalOffsetX = window.PenguinUI.Config.get(`global_bot_offsetX`) || "0";
+            let globalOffsetY = window.PenguinUI.Config.get(`global_bot_offsetY`) || "0";
+
+            controlTab.section("Navigation", "Move all bots at once")
+                .filteredList("Name", "ID", () => parsedRoomsArray, (room) => {
+                    window.myActiveBots.forEach(ws => {
+                        ws.send(window.msgpack.encode({ type: 2, data: ['message', 'join_room', { room: parseInt(room.id), x: 100, y: 100 }], options: { compress: true }, nsp: '/' }));
+                    });
+                })
+                .button("Warp all to me", "yellow", () => {
+                    const myRoom = window.__wc?.room?.key ? window.__wc.room.id : 100;
+                    window.myActiveBots.forEach(ws => {
+                        ws.send(window.msgpack.encode({ type: 2, data: ['message', 'join_room', { room: myRoom, x: 100, y: 100 }], options: { compress: true }, nsp: '/' }));
+                    });
+                })
+                .button("All join my igloo", "blue", () => {
+                    const myId = window.__client?.penguin?.id;
+                    if (myId) {
+                        window.myActiveBots.forEach(ws => {
+                            ws.send(window.msgpack.encode({ type: 2, data: ['message', 'join_igloo', { igloo: myId, x: 100, y: 100 }], options: { compress: true }, nsp: '/' }));
+                        });
+                    }
+                });
+
+            controlTab.section("Copying & Stuff", "Hivemind the main client")
+                .button("All waddle to me", "green", () => {
+                    const myX = window.__client?.penguin?.pos?.x || 100;
+                    const myY = window.__client?.penguin?.pos?.y || 100;
+                    window.myActiveBots.forEach(ws => {
+                        ws.send(window.msgpack.encode({ type: 2, data: ['message', 'send_position', { x: parseInt(myX), y: parseInt(myY) }], options: { compress: true }, nsp: '/' }));
+                    });
+                })
+                .checkbox("All copy my movement", `global_follow`, false, val => {
+                    window.myActiveBots.forEach(ws => ws.isFollowingMe = val);
+                })
+                .input("Movement Offset X", `global_offsetX`, globalOffsetX, "Offset X", (val) => {
+                    window.PenguinUI.Config.set(`global_offsetX`, val);
+                    // Force update the specific bot configs so the WS listener catches it
+                    window.myActiveBots.forEach(ws => {
+                        window.PenguinUI.Config.set(`${ws.botUser}_offsetX`, val); 
+                    });
+                })
+                .input("Movement Offset Y", `global_offsetY`, globalOffsetY, "Offset Y", (val) => {
+                    window.PenguinUI.Config.set(`global_offsetY`, val);
+                    window.myActiveBots.forEach(ws => {
+                        window.PenguinUI.Config.set(`${ws.botUser}_offsetY`, val);
+                    });
+                })
+                .checkbox("All copy my actions", `global_copying_actions`, false, val => {
+                    window.myActiveBots.forEach(ws => ws.isCopyingActions = val);
+                })
+                .checkbox("All copy my emotes", `global_copying_emotes`, false, val => {
+                    window.myActiveBots.forEach(ws => ws.isCopyingEmotes = val);
+                })
+                .checkbox("All copy my messages", `global_copying_messages`, false, val => {
+                    window.myActiveBots.forEach(ws => ws.isCopyingMessages = val);
+                })
+                .checkbox("All copy my snowballs", `global_copying_snowballs`, false, val => {
+                    window.myActiveBots.forEach(ws => ws.isCopyingSnowballs = val);
+                })
+                .checkbox("Echo my room joins", `global_copying_rooms`, false, val => {
+                    window.global_copying_rooms = val;
+                })
+                .checkbox("Echo my igloo joins", `global_copying_igloos`, false, val => {
+                    window.global_copying_igloos = val;
+                });
+
+            controlTab.section("Open book", "Everyone open maps/news")
+                .filteredList("Inter", "ID", () => parsedInterArray, (interObj) => {
+                    const myId = window.__client?.penguin?.id;
+                    if (myId) {
+                        window.myActiveBots.forEach(ws => {
+                            ws.send(window.msgpack.encode({ type: 2, data: ['message', 'open_book', { id: parseInt(myId), inter: parseInt(interObj.inter) }], options: { compress: true }, nsp: '/' }));
+                        });
+                    }
+                });
+
+            controlTab.section("Messages", "Hivemind chat")
+                .input("Input message", `global_msg`, globalMsgToSend, "Enter message...", (val) => {
+                    globalMsgToSend = val;
+                    window.PenguinUI.Config.set(`global_msg`, val);
+                })
+                .button("Send Message (ALL)", "green", () => {
+                    window.myActiveBots.forEach(ws => {
+                        ws.send(window.msgpack.encode({ type: 2, data: ['message', 'send_message', { message: globalMsgToSend }], options: { compress: true }, nsp: '/' }));
+                    });
+                });
+        }
+
         const bots = win.addTab("Bots");
         let savedBots = window.PenguinUI.Config.get("bot-list") || [];
 
@@ -848,6 +1014,69 @@
                 savedBots.push({ username: newBotUsername, password: newBotPassword });
                 window.PenguinUI.Config.set("bot-list", savedBots);
                 window.PenguinUI.showNotification("Bot added to list! 📦");
+            });
+
+        bots.section("Global Commands", "Command the whole squad at once")
+            .button("Open Global Management 🌐", "blue", () => {
+                openGlobalBotManagement();
+            });
+
+        bots.section("Mass Import", "Load txt/json with user:pass format")
+            .fileUpload("Upload Bot File", ".txt,.json", (content) => {
+                let newBots = [];
+                try {
+                    // First try parsing as JSON array just in case you feed it pure JSON
+                    let parsed = JSON.parse(content);
+                    if (Array.isArray(parsed)) {
+                        parsed.forEach(item => {
+                            if (typeof item === 'string' && item.includes(':')) {
+                                const splitIdx = item.indexOf(':');
+                                const u = item.slice(0, splitIdx);
+                                const p = item.slice(splitIdx + 1);
+                                newBots.push({username: u.trim(), password: p.trim()});
+                            } else if (item.username && item.password) {
+                                newBots.push({username: item.username, password: item.password});
+                            }
+                        });
+                    }
+                } catch(e) {
+                    // Fallback: It's raw text. Let's slice that shit line by line.
+                    const lines = content.split('\n');
+                    lines.forEach(line => {
+                        if (line.includes(':')) {
+                            // Safe split in case password literally has a colon in it
+                            const splitIdx = line.indexOf(':');
+                            const u = line.slice(0, splitIdx).trim();
+                            const p = line.slice(splitIdx + 1).trim();
+                            if (u && p) newBots.push({username: u, password: p});
+                        }
+                    });
+                }
+                
+                // Save the haul
+                if (newBots.length > 0) {
+                    const existingNames = new Set(savedBots.map(b => b.username));
+                    let added = 0;
+                    newBots.forEach(b => {
+                        if (!existingNames.has(b.username)) {
+                            savedBots.push(b);
+                            added++;
+                        }
+                    });
+                    window.PenguinUI.Config.set("bot-list", savedBots);
+                    window.PenguinUI.showNotification(`Imported ${added} new bots! Absolute W 🥵🔥`);
+                } else {
+                    window.PenguinUI.showNotification(`No valid user:pass combos found bro 😭 L`);
+                }
+            });
+
+        bots.section("Bot removal", "Emergency stop")
+            .button("Nuke All bots", "red", () => {
+                savedBots = [];
+                window.PenguinUI.Config.set("bot-list", []);
+                window.myActiveBots.forEach(s => s.close());
+                window.myActiveBots = [];
+                window.PenguinUI.showNotification("All bots wiped from existence ☢️");
             });
 
         bots.section("Bot removal", "Emergency stop")

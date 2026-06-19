@@ -216,10 +216,10 @@ const coreHooks = `
     });
 
     window._MM_Log = function(...args) {
-        _NativeLog.apply(window.console, ['%c[Penguin Terminal]%c', "color: #00ff00; font-weight: bold;", "", ...args]);
+        _NativeLog.apply(window.console, ['%c[X-Yukon]%c', "color: #00ff00; font-weight: bold;", "", ...args]);
     };
     window._MM_Error = function(...args) {
-        _NativeError.apply(window.console, ['%c[Penguin Terminal ERROR]%c', "color: #ff4444; font-weight: bold;", "", ...args]);
+        _NativeError.apply(window.console, ['%c[X-Yukon ERROR]%c', "color: #ff4444; font-weight: bold;", "", ...args]);
     };
 
     window.console.log = function() {};

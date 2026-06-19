@@ -125,7 +125,7 @@ window.PenguinUI = (function () {
             background: #007ad2 !important;
             border: 1px solid #008ce1 !important; 
         }
-        .mm-box.mm-minimized .mm-header, .mm-box.mm-minimized .mm-tabs, .mm-box.mm-minimized #mm-functional-panel, .mm-box.mm-minimized .mm-footer { display: none !important; }
+        .mm-box.mm-minimized .mm-header, .mm-box.mm-minimized .mm-tabs, .mm-box.mm-minimized .mm-window-content, .mm-box.mm-minimized #mm-functional-panel, .mm-box.mm-minimized .mm-footer { display: none !important; }
         .mm-toast-container { position: fixed; bottom: 20px; right: 20px; z-index: 1000000; display: flex; flex-direction: column; gap: 10px; pointer-events: none; }
         .mm-toast { background: rgba(20, 20, 20, 0.85); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); border-left: 4px solid var(--mm-theme); border-top: 1px solid rgba(255,255,255,0.05); color: #fff; padding: 12px 18px; font-family: Arial, sans-serif; font-size: 12px; font-weight: bold; border-radius: 4px; box-shadow: 0 8px 24px rgba(0,0,0,0.5); transform: translateX(125%); transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.35s ease; opacity: 0; display: flex; align-items: center; gap: 8px; }
         .mm-toast.show { transform: translateX(0); opacity: 1; }
@@ -223,12 +223,11 @@ window.PenguinUI = (function () {
                 restoreX = currentX; 
                 restoreY = currentY; 
                 
-                // 🔥 THE SAUCE: This appends the text WITHOUT nuking your event listeners 🔥
-                // Slappaa tää sinne toggleMinimize funktioon
-                box.insertAdjacentHTML('beforeend', '<span id="minimized-text" style="color: #fff; font-size: 11px; font-weight: bold; text-transform: uppercase; letter-spacing: 1px; z-index: 10;">X-YUKON</span>');                
+                // 🧠 Big brain: Use the actual window title so you know who is who
+                let shortTitle = title.length > 10 ? title.substring(0, 10) + '..' : title;
+                box.insertAdjacentHTML('beforeend', `<span id="minimized-text" style="color: #fff; font-size: 10px; font-weight: bold; text-transform: uppercase; letter-spacing: 1px; z-index: 10; pointer-events: none;">${shortTitle}</span>`);                
                 box.classList.add('mm-minimized'); 
             } else {
-                // Safe check so it doesn't throw a bitch fit if the element is missing
                 const minText = box.querySelector("#minimized-text");
                 if (minText) minText.remove();
 
@@ -239,6 +238,7 @@ window.PenguinUI = (function () {
             }
             wakePhysics();
         }
+
         if(!opts.minDisabled) minBtn.onclick = (e) => { e.stopPropagation(); toggleMinimize(); };
         box.onclick = () => { if (minimised) toggleMinimize(); };
 
@@ -256,9 +256,10 @@ window.PenguinUI = (function () {
         header.appendChild(closeBtn);
 
         const inner = document.createElement('div'); 
+        inner.className = 'mm-window-content'; // 🛑 WE ADDED THIS CLASS SO IT ACTUALLY HIDES
         if (!opts.noFooter) {
             inner.id = 'mm-functional-panel'; 
-            inner.className = 'mm-menu-locked';
+            inner.classList.add('mm-menu-locked');
         }
 
         const tabBar = document.createElement('div'); tabBar.className = 'mm-tabs';
@@ -322,7 +323,15 @@ window.PenguinUI = (function () {
             let targetTilt = 0; const boxRect = box.getBoundingClientRect();
             
             if (minimised) {
-                targetX = 20; targetY = window.innerHeight - 70; 
+                // 👇 SMART TASKBAR LOGIC 👇
+                // Finds all minimized windows and spaces them out by 80 pixels horizontally
+                const minWindows = Array.from(document.querySelectorAll('.mm-box.mm-minimized'));
+                let myIndex = minWindows.indexOf(box);
+                if (myIndex === -1) myIndex = 0; // Safe fallback
+                
+                targetX = 20 + (myIndex * 80); 
+                targetY = window.innerHeight - 70; 
+                
                 currentX += (targetX - currentX) * 0.12; 
                 currentY += (targetY - currentY) * 0.12; 
                 vx = 0; vy = 0; targetTilt = 0;
@@ -355,7 +364,7 @@ window.PenguinUI = (function () {
             box.style.transform = `rotate(${currentTilt}deg)`;
             
             // Loop sleep condition: Stop requesting frames if window isn't moving
-            if (!drag && !isRestoring && !minimised && Math.abs(vx) < 0.1 && Math.abs(vy) < 0.1 && Math.abs(targetX - currentX) < 0.5 && Math.abs(targetY - currentY) < 0.5 && Math.abs(targetTilt - currentTilt) < 0.1) {
+            if (!drag && !isRestoring && Math.abs(vx) < 0.1 && Math.abs(vy) < 0.1 && Math.abs(targetX - currentX) < 0.5 && Math.abs(targetY - currentY) < 0.5 && Math.abs(targetTilt - currentTilt) < 0.1) {
                 isPhysicsActive = false;
                 return;
             }
@@ -607,6 +616,30 @@ window.PenguinUI = (function () {
                 };
                 
                 wrap.appendChild(row); wrap.appendChild(inp); contentWrap.appendChild(wrap); 
+                return controls;
+            },
+            fileUpload(label, accept, onFileRead) {
+                const wrap = document.createElement('div'); wrap.style.marginBottom = '6px';
+                const row = document.createElement('div'); row.className = 'mm-row'; row.style.marginBottom = '6px';
+                row.innerHTML = `<span class="mm-label">${label}</span>`;
+                
+                const fileInp = document.createElement('input'); 
+                fileInp.type = 'file'; 
+                fileInp.accept = accept;
+                fileInp.style.cssText = 'font-size: 10px; color: var(--mm-text); width: 100%; background: #111; border: 1px solid var(--mm-border-light); padding: 4px; border-radius: 2px; outline: none; cursor: pointer;';
+                
+                fileInp.onchange = (e) => {
+                    const file = e.target.files[0];
+                    if (!file) return;
+                    const reader = new FileReader();
+                    reader.onload = (re) => { 
+                        if (onFileRead) onFileRead(re.target.result); 
+                        fileInp.value = ""; // Reset so you can upload the same file again if needed
+                    };
+                    reader.readAsText(file);
+                };
+                
+                wrap.appendChild(row); wrap.appendChild(fileInp); contentWrap.appendChild(wrap); 
                 return controls;
             }
         };

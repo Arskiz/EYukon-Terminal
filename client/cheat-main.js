@@ -181,7 +181,7 @@
 
     const parsedRoomsArray = [];
     const parsedItemsArray = [];
-    const parsedInterArray = [{id: 1, inter:"map"},{id:2,inter:"news"},{id:3,inter:"igloo"}];
+    const parsedInterArray = [{ id: 1, inter: "map" }, { id: 2, inter: "news" }, { id: 3, inter: "igloo" }];
     let lastRoom = 0;
 
     const TeleportController = {
@@ -333,22 +333,22 @@
         if (!window._MM_sendRawHooked) {
             window._MM_sendRawHooked = true;
             const original_MM_sendRaw = window._MM_sendRaw;
-            
+
             window._MM_sendRaw = function (bytes) {
-                try { 
+                try {
                     // 🛑 ONLY decode binary arrays. Strings will crash msgpack and break the hook!
                     if (bytes instanceof ArrayBuffer || bytes instanceof Uint8Array) {
                         const u8 = new Uint8Array(bytes);
                         const decoded = window.msgpack.decode(u8);
-                        
-                        if (snifferRecording) logPacket('OUT', decoded); 
-                        
+
+                        if (snifferRecording) logPacket('OUT', decoded);
+
                     } else if (typeof bytes === 'string') {
                         // Log string heartbeats without crashing
                         if (snifferRecording) logPacket('OUT', { data: bytes });
                     }
                 } catch (e) { console.error("Hook error:", e); }
-                
+
                 return original_MM_sendRaw(bytes);
             };
         }
@@ -585,10 +585,10 @@
 
                 // Restore follow state from config if they reconnect
                 ws.isFollowingMe = window.PenguinUI.Config.get(`${username}_follow`) || false;
-                ws.isCopyingActions = window.PenguinUI.Config.get(`${username}_copying_actions`)|| false;
-                ws.isCopyingEmotes = window.PenguinUI.Config.get(`${username}_copying_emotes`)|| false;
-                ws.isCopyingMessages = window.PenguinUI.Config.get(`${username}_copying_messages`)|| false;
-                ws.isCopyingSnowballs = window.PenguinUI.Config.get(`${username}_copying_snowballs`)|| false;
+                ws.isCopyingActions = window.PenguinUI.Config.get(`${username}_copying_actions`) || false;
+                ws.isCopyingEmotes = window.PenguinUI.Config.get(`${username}_copying_emotes`) || false;
+                ws.isCopyingMessages = window.PenguinUI.Config.get(`${username}_copying_messages`) || false;
+                ws.isCopyingSnowballs = window.PenguinUI.Config.get(`${username}_copying_snowballs`) || false;
 
                 ws.binaryType = "arraybuffer";
                 window.myActiveBots.push(ws);
@@ -632,16 +632,26 @@
 
                                 if (cmd === "send_position" && ws.isFollowingMe) {
                                     const myId = window.__client?.penguin?.id;
-                                    
+
                                     // If the incoming packet matches YOUR main account's ID, copy that shit!
                                     if (myId && parseInt(payload.id) === parseInt(myId)) {
-                                        sendBotPacket('send_position', { x: payload.x, y: payload.y });
+                                        const rawOffsetX = window.PenguinUI.Config.get(`${username}_offsetX`);
+                                        const rawOffsetY = window.PenguinUI.Config.get(`${username}_offsetY`);
+
+                                        // Prevent that NaN bullshit with a hard fallback
+                                        const offsetX = parseInt(rawOffsetX || 0) || 0;
+                                        const offsetY = parseInt(rawOffsetY || 0) || 0;
+
+                                        sendBotPacket('send_position', {
+                                            x: parseInt(payload.x) + offsetX,
+                                            y: parseInt(payload.y) + offsetY
+                                        });
                                     }
                                 }
 
                                 if (cmd === "send_frame" && ws.isCopyingActions) {
                                     const myId = window.__client?.penguin?.id;
-                                    
+
                                     // If the incoming packet matches YOUR main account's ID, copy that shit!
                                     if (myId && parseInt(payload.id) === parseInt(myId)) {
                                         sendBotPacket('send_frame', { set: payload.set, frame: payload.frame });
@@ -650,7 +660,7 @@
 
                                 if (cmd === "send_emote" && ws.isCopyingEmotes) {
                                     const myId = window.__client?.penguin?.id;
-                                    
+
                                     // If the incoming packet matches YOUR main account's ID, copy that shit!
                                     if (myId && parseInt(payload.id) === parseInt(myId)) {
                                         sendBotPacket('send_emote', { emote: payload.emote });
@@ -658,7 +668,7 @@
                                 }
                                 if (cmd === "send_message" && ws.isCopyingMessages) {
                                     const myId = window.__client?.penguin?.id;
-                                    
+
                                     // If the incoming packet matches YOUR main account's ID, copy that shit!
                                     if (myId && parseInt(payload.id) === parseInt(myId)) {
                                         sendBotPacket('send_message', { message: payload.message });
@@ -666,7 +676,7 @@
                                 }
                                 if (cmd === "snowball" && ws.isCopyingSnowballs) {
                                     const myId = window.__client?.penguin?.id;
-                                    
+
                                     // If the incoming packet matches YOUR main account's ID, copy that shit!
                                     if (myId && parseInt(payload.id) === parseInt(myId)) {
                                         sendBotPacket('snowball', { x: payload.x, y: payload.y });
@@ -686,11 +696,13 @@
         }
 
         function openBotManagement(bot) {
-            const win = window.PenguinUI.Window(`Managing: BOT ${bot.username}`, { width: '280px', x: 'center', noFooter: true, minDisable: true });
+            const win = window.PenguinUI.Window(`Managing: (BOT) ${bot.username}`, { width: '280px', x: 'center', noFooter: true, minDisable: true });
             const statusTab = win.addTab("Bot Status");
             const controlTab = win.addTab("Control");
 
             let msgToSend = window.PenguinUI.Config.get(`${bot.username}_msg`) || "";
+            let botOffsetX = parseInt(window.PenguinUI.Config.get(`${bot.username}_offsetX`)) || "0";
+            let botOffsetY =  parseInt(window.PenguinUI.Config.get(`${bot.username}_offsetY`)) || "0";
 
             statusTab.section("Status", "Bot connection status")
                 .label("Status: LOADING...")
@@ -733,19 +745,25 @@
                     const ws = window.myActiveBots.find(s => s.botUser === bot.username);
                     if (ws) ws.isFollowingMe = val;
                 })
-                .checkbox("Copy my actions",  `${bot.username}_copying_actions`, false, val => {
+                .input("Movement Offset X", `${bot.username}_offsetX`, botOffsetX, "leave empty for no offset", (val) => {
+                    window.PenguinUI.Config.set(`${bot.username}_offsetX`, val); // <-- Fixed this bitch
+                })
+                .input("Movement Offset Y", `${bot.username}_offsetY`, botOffsetY, "leave empty for no offset", (val) => {
+                    window.PenguinUI.Config.set(`${bot.username}_offsetY`, val); // <-- Fixed this bitch too
+                })
+                .checkbox("Copy my actions", `${bot.username}_copying_actions`, false, val => {
                     const ws = window.myActiveBots.find(s => s.botUser === bot.username);
                     if (ws) ws.isCopyingActions = val;
                 })
-                .checkbox("Copy my emotes",  `${bot.username}_copying_emotes`, false, val => {
+                .checkbox("Copy my emotes", `${bot.username}_copying_emotes`, false, val => {
                     const ws = window.myActiveBots.find(s => s.botUser === bot.username);
                     if (ws) ws.isCopyingEmotes = val;
                 })
-                .checkbox("Copy my messages",  `${bot.username}_copying_messages`, false, val => {
+                .checkbox("Copy my messages", `${bot.username}_copying_messages`, false, val => {
                     const ws = window.myActiveBots.find(s => s.botUser === bot.username);
                     if (ws) ws.isCopyingMessages = val;
                 })
-                .checkbox("Copy my snowballs",  `${bot.username}_copying_snowballs`, false, val => {
+                .checkbox("Copy my snowballs", `${bot.username}_copying_snowballs`, false, val => {
                     const ws = window.myActiveBots.find(s => s.botUser === bot.username);
                     if (ws) ws.isCopyingSnowballs = val;
                 });
@@ -768,7 +786,7 @@
 
             setTimeout(() => {
                 const boxes = Array.from(document.querySelectorAll('.mm-box'));
-                
+
                 const myBox = boxes.find(b => b.querySelector('.mm-title')?.textContent === `Managing: BOT ${bot.username}`);
 
                 if (!myBox) {

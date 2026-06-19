@@ -588,6 +588,8 @@
                 ws.isCopyingActions = window.PenguinUI.Config.get(`${username}_copying_actions`)|| false;
                 ws.isCopyingEmotes = window.PenguinUI.Config.get(`${username}_copying_emotes`)|| false;
                 ws.isCopyingMessages = window.PenguinUI.Config.get(`${username}_copying_messages`)|| false;
+                ws.isCopyingSnowballs = window.PenguinUI.Config.get(`${username}_copying_snowballs`)|| false;
+
                 ws.binaryType = "arraybuffer";
                 window.myActiveBots.push(ws);
 
@@ -662,6 +664,14 @@
                                         sendBotPacket('send_message', { message: payload.message });
                                     }
                                 }
+                                if (cmd === "snowball" && ws.isCopyingSnowballs) {
+                                    const myId = window.__client?.penguin?.id;
+                                    
+                                    // If the incoming packet matches YOUR main account's ID, copy that shit!
+                                    if (myId && parseInt(payload.id) === parseInt(myId)) {
+                                        sendBotPacket('snowball', { x: payload.x, y: payload.y });
+                                    }
+                                }
                             }
                         } catch (err) { }
                     }
@@ -734,6 +744,10 @@
                 .checkbox("Copy my messages",  `${bot.username}_copying_messages`, false, val => {
                     const ws = window.myActiveBots.find(s => s.botUser === bot.username);
                     if (ws) ws.isCopyingMessages = val;
+                })
+                .checkbox("Copy my snowballs",  `${bot.username}_copying_snowballs`, false, val => {
+                    const ws = window.myActiveBots.find(s => s.botUser === bot.username);
+                    if (ws) ws.isCopyingSnowballs = val;
                 });
             controlTab.section("Open book", "Show to others as if you are looking at map, newspaper or building...")
                 .filteredList("Inter", "ID", () => parsedInterArray, (interObj) => {

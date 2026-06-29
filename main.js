@@ -1,5 +1,30 @@
 const { app, Menu, BrowserWindow, ipcMain, crashReporter } = require('electron');
 const path = require('path');
+const DiscordRPC = require('discord-rpc');
+
+// Drop your Client ID right here
+const clientId = '1254076401666101288'; 
+DiscordRPC.register(clientId);
+
+const rpc = new DiscordRPC.Client({ transport: 'ipc' });
+
+rpc.on('ready', () => {
+    // This is the actual brainrot they see on your profile
+    rpc.setActivity({
+        details: 'CPLegacy Trainer', 
+        state: 'Idling..',
+        startTimestamp: new Date(),
+        largeImageKey: 'your_image_key', // upload an image in the Discord dev portal
+        largeImageText: 'Absolute W',
+        smallImageKey: 'small_image_key',
+        smallImageText: 'No cap',
+        instance: false,
+    });
+    console.log('RPC is locked in. W. 🚀');
+});
+
+// Boot that bitch up
+rpc.login({ clientId }).catch(console.error);
 
 
 // BOOT UP THE FED TRACKER 🚓

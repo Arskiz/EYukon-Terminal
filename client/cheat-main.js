@@ -323,6 +323,48 @@
                         _MM_Error(`Error: player ${playerObj.username} is not on the room!`);
                     }
 
+                    break;
+
+                // --- Player NameTag Stroke
+                case "nt-stroke-spoof":
+                    let targetStrokeColor = mod.action[0];
+                    let targetStroke = mod.action[1];
+                    if (window.__wc?.world?.room?.penguins[customPlayer.id]) {
+                        window.__wc.world.room.penguins[customPlayer.id].nameTag.setStroke(targetStrokeColor, parseInt(targetStroke));
+                        _MM_Log(`Set playerID ${customPlayer.id}'s nametag stroke to "${targetStroke}".`);
+                    }
+                    else {
+                        _MM_Error(`Error: player ${playerObj.username} is not on the room!`);
+                    }
+
+                    break;
+
+                // --- Player NameTag Color
+                case "nt-color-spoof":
+                    let targetNametagColor = mod.action;
+                    if (window.__wc?.world?.room?.penguins[customPlayer.id]) {
+                        window.__wc.world.room.penguins[customPlayer.id].nameTag.setColor(targetNametagColor);
+                        _MM_Log(`Set playerID ${customPlayer.id}'s nametag color to "${targetNametagColor}".`);
+                    }
+                    else {
+                        _MM_Error(`Error: player ${playerObj.username} is not on the room!`);
+                    }
+
+                    break;
+
+                // --- Player NameTag Size
+                case "spoof-nametag-scale":
+                    let targetNametagScale = mod.action;
+                    if (window.__wc?.world?.room?.penguins[customPlayer.id]) {
+                        window.__wc.world.room.penguins[customPlayer.id].nameTag.setFontSize(parseInt(targetNametagScale));
+                        _MM_Log(`Set playerID ${customPlayer.id}'s nametag scale to "${targetNametagScale}".`);
+                    }
+                    else {
+                        _MM_Error(`Error: player ${playerObj.username} is not on the room!`);
+                    }
+
+                    break;
+
             }
         });
     }
@@ -371,6 +413,16 @@
                                     if (ws.readyState === 1) {
                                         setTimeout(() => {
                                             ws.send(window.msgpack.encode({ type: 2, data: ['message', 'join_igloo', payload], options: { compress: true }, nsp: '/' }));
+                                        }, idx * 50);
+                                    }
+                                });
+                            }
+
+                            if (cmd === 'like_igloo' && window.global_copying_igloos) {
+                                window.myActiveBots.forEach((ws, idx) => {
+                                    if (ws.readyState === 1) {
+                                        setTimeout(() => {
+                                            ws.send(window.msgpack.encode({ type: 2, data: ['message', 'like_igloo', payload], options: { compress: true }, nsp: '/' }));
                                         }, idx * 50);
                                     }
                                 });
@@ -518,14 +570,30 @@
         //.checkbox("Copy player movement", "copy_mov", false, () => {});
 
         const customizationTab = profileWin.addTab("Customization");
-        let p_spoof_name = `penguinS_Name_${p.id}`;
-        let p_spoof_scale = `penguinS_Scale_${p.id}`;
+        let p_spoof_name = window.PenguinUI.Config.get(`penguinS_Name_${p.id}`);
+        let p_spoof_name_scale = window.PenguinUI.Config.get(`penguinS_Name_Scale${p.id}`);
+        let p_spoof_scale = window.PenguinUI.Config.get(`penguinS_Scale_${p.id}`);
+        let p_spoof_stroke = window.PenguinUI.Config.get(`penguinS_Stroke_${p.id}`);
+        let p_spoof_stroke_color = window.PenguinUI.Config.get(`penguinS_NStroke_${p.id}`);
+        let P_spoof_nametag_color = window.PenguinUI.Config.get(`penguinS_NColor_${p.id}`);
 
         customizationTab.section("Customize da penguin")
-            .input("Name Spoofing", `penguinS_Name_${p.id}`, "", "ex: Rockhopper | Rookie ... etc", val => { p_spoof_name = val; })
-            .button("Spoof their name", "spoof-name", () => applyCustomMod(p, "name-spoof", p_spoof_name))
             .input("Player Scale", `penguinS_Scale_${p.id}`, 1, "ex: 5 | 1 ... etc", val => { p_spoof_scale = val; })
             .button("Spoof scale", "spoof-scale", () => applyCustomMod(p, "scale-spoof", p_spoof_scale));
+            
+        customizationTab.section("Nametag n stuff")
+            .input("Nametag Text", `penguinS_Name_${p.id}`, "", "ex: Rockhopper | Rookie ... etc", val => { p_spoof_name = val; })
+            .button("Update Name", "spoof-name", () => applyCustomMod(p, "name-spoof", p_spoof_name))
+            
+            .input("Nametag Color", `penguinS_NColor_${p.id}`, "#000000", "", val => { P_spoof_nametag_color = val; })
+            .button("Update Color", "nt-color-spoof", () => applyCustomMod(p, "nt-color-spoof", P_spoof_nametag_color))
+            
+            .input("Nametag Size", `penguinS_Name_Scale${p.id}`, 1, "ex: 1 | 5 ... etc", val => { p_spoof_name_scale = val; })
+            .button("Update Size", "spoof-nametag-scale", () => applyCustomMod(p, "spoof-nametag-scale", p_spoof_name_scale))
+
+            .input("Stroke", `penguinS_Stroke_${p.id}`, 1, "ex: 1 | 5 ... etc", val => { p_spoof_stroke = val; })
+            .input("Stroke Color", `penguinS_NStroke_${p.id}`, "#000000", "", val => { p_spoof_stroke_color = val; })
+            .button("Update stroke", "spoof-scale", () => applyCustomMod(p, "nt-stroke-spoof", [p_spoof_stroke_color, p_spoof_stroke]));
 
         function applyCustomMod(player, modName, modValue) {
             // Guard clause: no player? get the fuck out
@@ -943,18 +1011,36 @@
                 .checkbox("All copy my movement", `global_follow`, false, val => {
                     window.myActiveBots.forEach(ws => ws.isFollowingMe = val);
                 })
-                .input("Movement Offset X", `global_offsetX`, globalOffsetX, "Offset X", (val) => {
-                    window.PenguinUI.Config.set(`global_offsetX`, val);
-                    // Force update the specific bot configs so the WS listener catches it
-                    window.myActiveBots.forEach(ws => {
-                        window.PenguinUI.Config.set(`${ws.botUser}_offsetX`, val); 
-                    });
-                })
-                .input("Movement Offset Y", `global_offsetY`, globalOffsetY, "Offset Y", (val) => {
-                    window.PenguinUI.Config.set(`global_offsetY`, val);
-                    window.myActiveBots.forEach(ws => {
-                        window.PenguinUI.Config.set(`${ws.botUser}_offsetY`, val);
-                    });
+                // 👇 Rip out the two .input lines and slap this in 👇
+                .fileUpload("Upload Formation JSON 🗺️", ".json", (content) => {
+                    try {
+                        let formation = JSON.parse(content);
+                        // Handles both array format and your weird object format just in case 🧠
+                        let offsets = Array.isArray(formation) ? formation : Object.values(formation);
+                        
+                        if (offsets.length === 0) return window.PenguinUI.showNotification("Provide a valid JSON.", "⚠️");
+                        
+                        let activeSquad = window.myActiveBots || [];
+                        if (activeSquad.length === 0) return window.PenguinUI.showNotification("Bots offline, connect them first.", "⚠️");
+                        
+                        let applied = 0;
+                        activeSquad.forEach((ws, idx) => {
+                            // Modulo operator so it wraps around if you got more bots than formation slots
+                            let pos = offsets[idx % offsets.length]; 
+                            let ox = pos.x || 0;
+                            let oy = pos.y || 0;
+                            
+                            // Directly slam these into the config so the WS listener catches them
+                            window.PenguinUI.Config.set(`${ws.botUser}_offsetX`, ox);
+                            window.PenguinUI.Config.set(`${ws.botUser}_offsetY`, oy);
+                            applied++;
+                        });
+                        
+                        window.PenguinUI.showNotification(`Formation applied for ${applied} bots.`);
+                    } catch (err) {
+                        window.PenguinUI.showNotification("Invalid JSON syntax", "⚠️");
+                        console.error("Formation parse error:", err);
+                    }
                 })
                 .checkbox("All copy my actions", `global_copying_actions`, false, val => {
                     window.myActiveBots.forEach(ws => ws.isCopyingActions = val);
